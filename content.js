@@ -125,7 +125,9 @@ if (window.__mangaReaderActive) {
     sendStatus(`✓ Found ${images.length} images, opening reader...`);
 
     const title = document.title.replace(/\s*-\s*Google Drive\s*$/, '').trim() || 'Manga Reader';
-    chrome.runtime.sendMessage({ action: 'openReader', images, title }).catch((err) => {
+    chrome.runtime.sendMessage({ action: 'openReader', images, title }).then(() => {
+      window.__mangaReaderActive = false;
+    }).catch((err) => {
       sendStatus('❌ Error opening reader: ' + err.message);
       window.__mangaReaderActive = false;
     });
