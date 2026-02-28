@@ -538,13 +538,50 @@
             color: #1a1a1a;
             font-weight: bold;
         }
+
+        /* Continuous scroll mode */
+        #continuous-container {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            gap: 4px;
+            transform-origin: top center;
+            will-change: transform;
+        }
+
+        #continuous-container img {
+            max-width: 100%;
+            object-fit: contain;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .manga-viewer.continuous {
+            overflow-y: auto;
+            overflow-x: hidden;
+            align-items: flex-start;
+        }
+
+        .manga-viewer.continuous #preview {
+            display: none;
+        }
+
+        .manga-viewer.continuous #continuous-container {
+            display: flex;
+        }
+
+        .manga-viewer.continuous.fit-width #continuous-container img {
+            width: 100%;
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <div class="manga-viewer">
+        <div class="manga-viewer" id="viewer">
             <img id="preview" src="" alt="">
+            <div id="continuous-container"></div>
             <div id="loading-overlay">
                 <div class="spinner"></div>
                 <div class="loading-page" id="loadingPage"></div>
@@ -560,15 +597,20 @@
             <div class="sidebar-content">
                 <h1>Manga</h1>
                 <div class="option-group">
-                    <label class="toggle-label" title="Keep zoom level when switching pages">
-                        <input type="checkbox" id="lockZoom">
+                    <label class="toggle-label" title="Stack all pages vertically and scroll continuously">
+                        <input type="checkbox" id="continuous">
                         <div class="toggle-switch"></div>
-                        <span>Lock Zoom</span>
+                        <span>Continuous</span>
                     </label>
                     <label class="toggle-label" title="Scale image to full width, scroll vertically to read">
                         <input type="checkbox" id="fitWidth">
                         <div class="toggle-switch"></div>
                         <span>Fit Width</span>
+                    </label>
+                    <label class="toggle-label" title="Keep zoom level when switching pages">
+                        <input type="checkbox" id="lockZoom">
+                        <div class="toggle-switch"></div>
+                        <span>Lock Zoom</span>
                     </label>
                 </div>
                 <div class="nav-bar">

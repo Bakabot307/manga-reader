@@ -27,10 +27,20 @@ chrome.runtime.sendMessage({ action: 'getImages' }, (response) => {
 
 // ─── Transform ───────────────────────────────────────────────────────────────
 function applyTransform() {
-  const img = document.getElementById('preview');
-  if (!img) return;
-  img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
-  img.style.cursor = zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'pointer';
+  const isContinuous = document.getElementById('continuous');
+  if (isContinuous && isContinuous.checked) {
+    const container = document.getElementById('continuous-container');
+    if (container) {
+      container.style.transform = `translateX(${panX}px) scale(${zoom})`;
+    }
+    const viewer = document.getElementById('viewer');
+    if (viewer) viewer.style.cursor = zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'grab';
+  } else {
+    const img = document.getElementById('preview');
+    if (!img) return;
+    img.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+    img.style.cursor = zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'pointer';
+  }
 }
 
 function resetZoom() {
@@ -41,16 +51,23 @@ function resetZoom() {
 // ─── Viewer events ───────────────────────────────────────────────────────────
 function attachViewerEvents(viewer, reader) {
   viewer.addEventListener('wheel', (e) => {
+    const isContinuous = document.getElementById('continuous').checked;
     const isFitWidth = document.getElementById('fitWidth').checked;
+
+    // In continuous mode, only intercept Ctrl+Scroll for zoom, let regular scroll work natively
+    if (isContinuous && !(e.ctrlKey || e.metaKey)) return;
+
     // In fit-width mode with no zoom, let native scroll handle it
     if (isFitWidth && zoom <= 1 && !(e.ctrlKey || e.metaKey)) return;
+
     e.preventDefault();
     if (e.ctrlKey || e.metaKey) {
+      const minZoom = isContinuous ? 0.2 : 1;
       const oldZoom = zoom;
-      zoom = Math.max(1, Math.min(8, zoom * (e.deltaY > 0 ? 0.85 : 1.15)));
-      if (zoom === 1) {
+      zoom = Math.max(minZoom, Math.min(8, zoom * (e.deltaY > 0 ? 0.85 : 1.15)));
+      if (zoom <= 1) {
         panX = 0; panY = 0;
-      } else {
+      } else if (!isContinuous) {
         const rect = viewer.getBoundingClientRect();
         const cx = e.clientX - rect.left - rect.width / 2;
         const cy = e.clientY - rect.top - rect.height / 2;
@@ -66,12 +83,13 @@ function attachViewerEvents(viewer, reader) {
 
   viewer.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
+    const isContinuous = document.getElementById('continuous').checked;
     isDragging = true;
     didDrag = false;
     dragLastX = e.clientX;
     dragLastY = e.clientY;
     const isFitWidth = document.getElementById('fitWidth').checked;
-    if (isFitWidth) {
+    if (isContinuous || isFitWidth) {
       viewer.style.cursor = 'grabbing';
       e.preventDefault();
     } else if (zoom > 1) {
@@ -86,9 +104,13 @@ function attachViewerEvents(viewer, reader) {
     dragLastX = e.clientX;
     dragLastY = e.clientY;
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didDrag = true;
+    const isContinuous = document.getElementById('continuous').checked;
     const isFitWidth = document.getElementById('fitWidth').checked;
-    if (isFitWidth && zoom <= 1) {
-      // Drag-to-scroll in fit-width mode
+    if (isContinuous && zoom > 1) {
+      panX += dx;
+      viewer.scrollTop -= dy;
+      applyTransform();
+    } else if ((isContinuous || isFitWidth) && zoom <= 1) {
       viewer.scrollTop -= dy;
     } else if (zoom > 1) {
       panX += dx; panY += dy; applyTransform();
@@ -98,13 +120,14 @@ function attachViewerEvents(viewer, reader) {
   document.addEventListener('mouseup', (e) => {
     if (!isDragging) return;
     isDragging = false;
+    const isContinuous = document.getElementById('continuous').checked;
     const isFitWidth = document.getElementById('fitWidth').checked;
-    if (isFitWidth) {
+    if (isContinuous || isFitWidth) {
       viewer.style.cursor = 'grab';
     } else {
       applyTransform();
     }
-    if (!didDrag) {
+    if (!didDrag && !isContinuous) {
       const rect = viewer.getBoundingClientRect();
       if ((e.clientX - rect.left) > rect.width / 2) reader.next();
       else reader.prev();
@@ -116,20 +139,48 @@ function attachViewerEvents(viewer, reader) {
 
 // ─── Reader ──────────────────────────────────────────────────────────────────
 function initReader(images) {
+  let scrollObserver = null;
+  let suppressScrollUpdate = false;
+
   const reader = {
     idx: 0,
     total: images.length,
 
-    init() {
+    savePrefs() {
+      chrome.storage.local.set({
+        readerPrefs: {
+          continuous: document.getElementById('continuous').checked,
+          fitWidth: document.getElementById('fitWidth').checked,
+          lockZoom: document.getElementById('lockZoom').checked,
+          sidebarCollapsed: document.getElementById('sidebar').classList.contains('collapsed')
+        }
+      });
+    },
+
+    async loadPrefs() {
+      return new Promise(resolve => {
+        chrome.storage.local.get('readerPrefs', (result) => resolve(result.readerPrefs || null));
+      });
+    },
+
+    async init() {
       document.getElementById('total').textContent = this.total;
       document.getElementById('miniTotal').textContent = this.total;
+
+      // Load saved preferences
+      const prefs = await this.loadPrefs();
 
       // Sidebar toggle
       const sidebar = document.getElementById('sidebar');
       const toggle = document.getElementById('sidebarToggle');
+      if (prefs && prefs.sidebarCollapsed) {
+        sidebar.classList.add('collapsed');
+        toggle.textContent = '\u2190';
+      }
       toggle.addEventListener('click', () => {
         sidebar.classList.toggle('collapsed');
-        toggle.textContent = sidebar.classList.contains('collapsed') ? '←' : '→';
+        toggle.textContent = sidebar.classList.contains('collapsed') ? '\u2190' : '\u2192';
+        this.savePrefs();
       });
 
       // Mini page input (collapsed sidebar)
@@ -160,7 +211,7 @@ function initReader(images) {
       const jumpInput = document.getElementById('jump');
       jumpInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); this.go(); }
-        e.stopPropagation(); // prevent A/D navigation while typing
+        e.stopPropagation();
       });
       jumpInput.addEventListener('focus', () => jumpInput.select());
 
@@ -182,34 +233,50 @@ function initReader(images) {
       });
       document.addEventListener('mouseup', () => { resizing = false; });
 
+      // Continuous toggle
+      document.getElementById('continuous').addEventListener('change', (e) => {
+        const viewer = document.getElementById('viewer');
+        if (e.target.checked) {
+          resetZoom();
+          viewer.classList.add('continuous');
+          this.buildContinuous();
+        } else {
+          resetZoom();
+          viewer.classList.remove('continuous');
+          this.destroyContinuous();
+          this.show(this.idx);
+        }
+        this.savePrefs();
+      });
+
       // Fit Width toggle
       document.getElementById('fitWidth').addEventListener('change', (e) => {
         if (e.target.checked) {
           document.getElementById('lockZoom').checked = false;
         }
-        const viewer = document.querySelector('.manga-viewer');
+        const viewer = document.getElementById('viewer');
         viewer.classList.toggle('fit-width', e.target.checked);
-        viewer.style.cursor = e.target.checked ? 'grab' : '';
+        viewer.style.cursor = (e.target.checked || document.getElementById('continuous').checked) ? 'grab' : '';
         resetZoom();
         viewer.scrollTop = 0;
+        this.savePrefs();
       });
 
-      // Lock Zoom toggle — mutually exclusive with Fit Width
+      // Lock Zoom toggle — mutually exclusive with Fit Width only
       document.getElementById('lockZoom').addEventListener('change', (e) => {
         if (e.target.checked) {
           document.getElementById('fitWidth').checked = false;
-          const viewer = document.querySelector('.manga-viewer');
+          const viewer = document.getElementById('viewer');
           viewer.classList.remove('fit-width');
         }
+        this.savePrefs();
       });
 
-      attachViewerEvents(document.querySelector('.manga-viewer'), this);
+      attachViewerEvents(document.getElementById('viewer'), this);
 
       document.addEventListener('keydown', (e) => {
-        // Skip when editing page inputs
         const active = document.activeElement;
         if (active === document.getElementById('jump') || active === document.getElementById('miniCurrent')) return;
-        // Use e.code for letter keys to avoid Unikey/IME conflicts
         if (e.key === 'ArrowRight' || e.key === ' ' || e.code === 'KeyD') { e.preventDefault(); this.next(); }
         if (e.key === 'ArrowLeft' || e.code === 'KeyA') { e.preventDefault(); this.prev(); }
         if (e.code === 'KeyF') document.documentElement.requestFullscreen().catch(() => { });
@@ -217,8 +284,90 @@ function initReader(images) {
       });
 
       this.show(0);
+
+      // Apply saved preferences (after event listeners are attached)
+      if (prefs) {
+        if (prefs.fitWidth) {
+          document.getElementById('fitWidth').checked = true;
+          document.getElementById('fitWidth').dispatchEvent(new Event('change'));
+        }
+        if (prefs.lockZoom) {
+          document.getElementById('lockZoom').checked = true;
+          document.getElementById('lockZoom').dispatchEvent(new Event('change'));
+        }
+        if (prefs.continuous) {
+          document.getElementById('continuous').checked = true;
+          document.getElementById('continuous').dispatchEvent(new Event('change'));
+        }
+      }
     },
 
+    // ─── Continuous mode ───────────────────────────────────────────────
+    buildContinuous() {
+      const container = document.getElementById('continuous-container');
+      container.innerHTML = '';
+      images.forEach((imgData, i) => {
+        const img = document.createElement('img');
+        img.src = imgData.src;
+        img.alt = `Page ${i + 1}`;
+        img.dataset.page = i;
+        img.id = `cpage${i}`;
+        container.appendChild(img);
+      });
+
+      // Use IntersectionObserver to track which page is visible
+      if (scrollObserver) scrollObserver.disconnect();
+      scrollObserver = new IntersectionObserver((entries) => {
+        if (suppressScrollUpdate) return;
+        let bestEntry = null;
+        let bestRatio = 0;
+        entries.forEach(entry => {
+          if (entry.isIntersecting && entry.intersectionRatio > bestRatio) {
+            bestRatio = entry.intersectionRatio;
+            bestEntry = entry;
+          }
+        });
+        if (bestEntry) {
+          const pageIdx = parseInt(bestEntry.target.dataset.page);
+          if (!isNaN(pageIdx) && pageIdx !== this.idx) {
+            this.idx = pageIdx;
+            this._updatePageUI(pageIdx);
+          }
+        }
+      }, {
+        root: document.getElementById('viewer'),
+        threshold: [0, 0.25, 0.5, 0.75, 1]
+      });
+
+      container.querySelectorAll('img').forEach(img => scrollObserver.observe(img));
+      this.scrollToPage(this.idx);
+    },
+
+    destroyContinuous() {
+      if (scrollObserver) { scrollObserver.disconnect(); scrollObserver = null; }
+      document.getElementById('continuous-container').innerHTML = '';
+    },
+
+    scrollToPage(i) {
+      const el = document.getElementById(`cpage${i}`);
+      if (!el) return;
+      suppressScrollUpdate = true;
+      el.scrollIntoView({ block: 'start', behavior: 'instant' });
+      setTimeout(() => { suppressScrollUpdate = false; }, 100);
+    },
+
+    _updatePageUI(i) {
+      document.getElementById('jump').value = i + 1;
+      document.getElementById('miniCurrent').value = i + 1;
+      document.querySelectorAll('.page-item').forEach(el => el.classList.remove('current'));
+      const pgEl = document.getElementById('pg' + i);
+      if (pgEl) {
+        pgEl.classList.add('current');
+        try { pgEl.scrollIntoView({ block: 'center' }); } catch (e) { }
+      }
+    },
+
+    // ─── Single-page mode ──────────────────────────────────────────────
     showLoading() {
       document.getElementById('loading-overlay').style.display = 'flex';
     },
@@ -232,6 +381,14 @@ function initReader(images) {
     show(i) {
       if (i < 0 || i >= this.total) return;
       this.idx = i;
+
+      // In continuous mode, scroll to the page instead
+      if (document.getElementById('continuous').checked) {
+        this.scrollToPage(i);
+        this._updatePageUI(i);
+        return;
+      }
+
       const loadId = ++this._loadId;
 
       const isLockZoom = document.getElementById('lockZoom').checked;
@@ -242,14 +399,8 @@ function initReader(images) {
         panY = 0;
         applyTransform();
       }
-      document.getElementById('jump').value = i + 1;
-      document.getElementById('miniCurrent').value = i + 1;
-      document.querySelectorAll('.page-item').forEach(el => el.classList.remove('current'));
-      const pgEl = document.getElementById('pg' + i);
-      if (pgEl) {
-        pgEl.classList.add('current');
-        try { pgEl.scrollIntoView({ block: 'center' }); } catch (e) { }
-      }
+
+      this._updatePageUI(i);
 
       // Show loading overlay
       const loadingPage = document.getElementById('loadingPage');
@@ -262,7 +413,7 @@ function initReader(images) {
         img.src = src;
         this.hideLoading();
         if (isLockZoom && zoom > 1) {
-          const viewer = document.querySelector('.manga-viewer');
+          const viewer = document.getElementById('viewer');
           const viewerH = viewer.clientHeight;
           const imgDisplayH = img.clientHeight * zoom;
           if (imgDisplayH > viewerH) {
@@ -272,7 +423,7 @@ function initReader(images) {
           applyTransform();
         }
         if (document.getElementById('fitWidth').checked) {
-          document.querySelector('.manga-viewer').scrollTop = 0;
+          document.getElementById('viewer').scrollTop = 0;
         }
       };
 
@@ -287,7 +438,6 @@ function initReader(images) {
       preload.onload = doApply;
       preload.onerror = () => {
         if (loadId !== this._loadId) return;
-        // On error, still set the src directly so the browser shows its error
         img.src = images[i].src;
         this.hideLoading();
       };
