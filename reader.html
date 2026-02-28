@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Reader</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #ff8a80;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ffab91;
+        }
+
+        body {
+            background: #0a0a0a;
+            font-family: 'Georgia', serif;
+            color: #ff8a80;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Viewer */
+        .manga-viewer {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            background: #000;
+        }
+
+        .manga-viewer img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            transform-origin: center center;
+            will-change: transform;
+            user-select: none;
+            -webkit-user-drag: none;
+            transition: opacity 0.15s ease;
+        }
+
+        .manga-viewer.fit-width {
+            align-items: flex-start;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .manga-viewer.fit-width img {
+            width: 100%;
+            max-height: none;
+            object-fit: fill;
+        }
+
+        /* Loading overlay */
+        #loading-overlay {
+            position: absolute;
+            inset: 0;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background: transparent;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 80, 60, 0.3);
+            border-top-color: #ff3d2e;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loading-page {
+            font-size: 20px;
+            font-weight: bold;
+            color: #ff3d2e;
+            font-family: monospace;
+            letter-spacing: 1px;
+            text-shadow: 0 0 12px rgba(0, 0, 0, 0.95), 0 0 24px rgba(0, 0, 0, 0.85), 0 2px 4px rgba(0, 0, 0, 0.95);
+        }
+
+        .loading-text {
+            font-size: 13px;
+            color: #ff5a4a;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 0, 0, 0.6);
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            border-left: 2px solid #ff8a80;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transition: width 0.25s ease, border-color 0.25s ease;
+            overflow: visible;
+        }
+
+        .sidebar-toggle {
+            position: fixed;
+            bottom: 16px;
+            right: 16px;
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 138, 128, 0.1);
+            border: 1px solid rgba(255, 138, 128, 0.3);
+            border-radius: 6px;
+            color: #ff8a80;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 15;
+            padding: 0;
+            transition: background 0.2s;
+        }
+
+        .sidebar-toggle:hover {
+            background: rgba(255, 138, 128, 0.25);
+        }
+
+        .sidebar-content {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex: 1;
+        }
+
+        .sidebar.collapsed {
+            width: 0;
+            border-left-color: transparent;
+        }
+
+        .sidebar.collapsed .sidebar-content {
+            display: none;
+        }
+
+        .mini-page {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            left: -50px;
+            width: 48px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #1a1a1a;
+            border: 1px solid #ff8a80;
+            border-right: none;
+            border-radius: 6px 0 0 6px;
+            padding: 10px 6px;
+            font-family: monospace;
+            gap: 2px;
+            z-index: 15;
+        }
+
+        .mini-page .mini-current {
+            width: 36px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #ff8a80;
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid transparent;
+            text-align: center;
+            font-family: monospace;
+            padding: 0;
+            cursor: pointer;
+            -moz-appearance: textfield;
+        }
+
+        .mini-page .mini-current:focus {
+            outline: none;
+            border-bottom-color: #ff8a80;
+        }
+
+        .mini-page .mini-current::-webkit-inner-spin-button,
+        .mini-page .mini-current::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .mini-page .mini-sep {
+            font-size: 8px;
+            color: #555;
+        }
+
+        .mini-page .mini-total {
+            font-size: 14px;
+            color: #888;
+        }
+
+        .sidebar.collapsed .mini-page {
+            display: flex;
+        }
+
+        .sidebar h1 {
+            font-size: 16px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 2px solid #ff8a80;
+            padding-bottom: 8px;
+        }
+
+        .status {
+            background: rgba(0, 0, 0, 0.3);
+            border-left: 3px solid #ff8a80;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.8;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-weight: bold;
+            color: #ffab91;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-bar {
+            display: flex;
+            align-items: stretch;
+            gap: 6px;
+        }
+
+        .nav-bar button {
+            flex: 0 0 auto;
+            padding: 0 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .page-input-group {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            font-family: monospace;
+            font-size: 13px;
+            color: #ffab91;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 138, 128, 0.3);
+            border-radius: 4px;
+            padding: 6px 4px;
+            transition: border-color 0.2s;
+        }
+
+        .page-input-group:focus-within {
+            border-color: #ff8a80;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .page-input-group input {
+            width: 30px;
+            padding: 0;
+            text-align: center;
+            background: transparent;
+            border: none;
+            color: #ffab91;
+            font-family: monospace;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        .page-input-group input:focus {
+            outline: none;
+        }
+
+        .page-input-group .page-suffix {
+            color: #888;
+            font-size: 13px;
+            pointer-events: none;
+        }
+
+        .page-input-group input::-webkit-inner-spin-button,
+        .page-input-group input::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .page-input-group input {
+            -moz-appearance: textfield;
+        }
+
+        button {
+            flex: 1;
+            padding: 10px;
+            background: #ff8a80;
+            border: none;
+            border-radius: 4px;
+            color: #1a1a1a;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            font-size: 12px;
+        }
+
+        button:hover {
+            background: #ffab91;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        input {
+            flex: 1;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #ff8a80;
+            border-radius: 4px;
+            color: #ff8a80;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #ffab91;
+        }
+
+        .option-group {
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            cursor: pointer;
+            color: #888;
+            transition: color 0.2s;
+            user-select: none;
+        }
+
+        .toggle-label:hover {
+            color: #ff8a80;
+        }
+
+        .toggle-label input[type="checkbox"] {
+            display: none;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 36px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 138, 128, 0.2);
+            transition: all 0.25s ease;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 14px;
+            height: 14px;
+            background: #666;
+            border-radius: 50%;
+            transition: all 0.25s ease;
+        }
+
+        .toggle-label input:checked+.toggle-switch {
+            background: rgba(255, 138, 128, 0.25);
+            border-color: #ff8a80;
+            box-shadow: 0 0 8px rgba(255, 138, 128, 0.3);
+        }
+
+        .toggle-label input:checked+.toggle-switch::after {
+            left: 18px;
+            background: #ff8a80;
+        }
+
+        .toggle-label input:checked~span:last-child {
+            color: #ff8a80;
+        }
+
+        .shortcuts {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 11px;
+            color: #999;
+            line-height: 2;
+        }
+
+        .key {
+            background: #ff8a80;
+            color: #1a1a1a;
+            padding: 1px 5px;
+            border-radius: 2px;
+            font-weight: bold;
+            font-family: monospace;
+            margin-right: 3px;
+        }
+
+        .page-list-wrapper {
+            display: flex;
+            flex-direction: column;
+            min-height: 60px;
+            position: relative;
+        }
+
+        .page-list {
+            height: 160px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            padding: 8px;
+            font-size: 10px;
+        }
+
+        .page-list-resize {
+            height: 6px;
+            cursor: ns-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 0 0 4px 4px;
+            transition: background 0.2s;
+        }
+
+        .page-list-resize:hover {
+            background: rgba(255, 138, 128, 0.2);
+        }
+
+        .page-list-resize::after {
+            content: '';
+            width: 30px;
+            height: 2px;
+            background: rgba(255, 138, 128, 0.3);
+            border-radius: 1px;
+        }
+
+        .page-item {
+            padding: 3px 5px;
+            color: #666;
+            border-bottom: 1px solid rgba(255, 138, 128, 0.1);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .page-item:hover {
+            background: rgba(255, 138, 128, 0.1);
+            color: #ff8a80;
+        }
+
+        .page-item.current {
+            background: #ff8a80;
+            color: #1a1a1a;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="manga-viewer">
+            <img id="preview" src="" alt="">
+            <div id="loading-overlay">
+                <div class="spinner"></div>
+                <div class="loading-page" id="loadingPage"></div>
+            </div>
+        </div>
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-toggle" id="sidebarToggle">→</div>
+            <div class="mini-page">
+                <input type="number" class="mini-current" id="miniCurrent" value="1" min="1">
+                <span class="mini-sep">—</span>
+                <span class="mini-total" id="miniTotal">0</span>
+            </div>
+            <div class="sidebar-content">
+                <h1>Manga</h1>
+                <div class="option-group">
+                    <label class="toggle-label" title="Keep zoom level when switching pages">
+                        <input type="checkbox" id="lockZoom">
+                        <div class="toggle-switch"></div>
+                        <span>Lock Zoom</span>
+                    </label>
+                    <label class="toggle-label" title="Scale image to full width, scroll vertically to read">
+                        <input type="checkbox" id="fitWidth">
+                        <div class="toggle-switch"></div>
+                        <span>Fit Width</span>
+                    </label>
+                </div>
+                <div class="nav-bar">
+                    <button id="prevBtn">←</button>
+                    <div class="page-input-group">
+                        <input type="number" id="jump" value="1" min="1">
+                        <span class="page-suffix">/ <span id="total">0</span></span>
+                    </div>
+                    <button id="nextBtn">→</button>
+                </div>
+                <div class="shortcuts">
+                    <div><span class="key">← →</span> <span class="key">A D</span> Prev / Next</div>
+                    <div><span class="key">Space</span> Next page</div>
+                    <div><span class="key">Ctrl+Scroll</span> Zoom in / out</div>
+                    <div><span class="key">Scroll</span> Pan (zoomed) · Scroll (Fit Width)</div>
+                    <div><span class="key">Drag</span> Pan (zoomed) · Scroll (Fit Width)</div>
+                    <div><span class="key">Click</span> L / R half → Prev / Next</div>
+                    <div><span class="key">Enter</span> Go to page (input)</div>
+                    <div><span class="key">Esc</span> Reset zoom</div>
+                    <div><span class="key">F</span> Fullscreen</div>
+                </div>
+                <div class="page-list-wrapper">
+                    <div style="font-size: 10px; margin-bottom: 5px; color: #999;">Pages:</div>
+                    <div class="page-list" id="pageList"></div>
+                    <div class="page-list-resize" id="pageListResize"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="reader.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            width: 300px;
+            margin: 0;
+            padding: 15px;
+            background: #0a0a0a;
+            color: #ff8a80;
+            font-family: 'Georgia', serif;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            background: #ff8a80;
+            border: none;
+            border-radius: 4px;
+            color: #1a1a1a;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #ffab91;
+            transform: translateY(-2px);
+        }
+
+        .info {
+            background: rgba(255, 138, 128, 0.1);
+            border: 1px solid #ff8a80;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #999;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+
+        .status.error {
+            color: #ff6b6b;
+        }
+
+        .status.success {
+            color: #8fba00;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Manga Reader</h1>
+    <button id="loadBtn">Load Manga from Google Drive</button>
+    <div class="info">
+        <strong>How to use:</strong>
+        <ol style="margin: 5px 0; padding-left: 20px;">
+            <li>Go to Google Drive folder with manga</li>
+            <li>Click this extension button</li>
+            <li>Click "Load Manga"</li>
+        </ol>
+    </div>
+    <div id="status"></div>
+    <script src="popup.js"></script>
+</body>
+
+</html>
