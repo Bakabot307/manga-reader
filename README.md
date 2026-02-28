@@ -27,7 +27,7 @@ A lightweight Chrome extension for reading manga directly from Google Drive. It 
 ### Option 2: Clone with Git
 
 ```bash
-git clone https://github.com/<username>/manga-reader.git
+git clone https://github.com/Bakabot307/manga-reader.git
 ```
 
 ---
