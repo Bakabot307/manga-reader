@@ -8,12 +8,24 @@ A lightweight Chrome extension for reading manga directly from Google Drive. It 
 
 - **Auto-scan images** — Detects all image files (JPG, PNG, WebP, GIF) in a Google Drive folder
 - **Built-in reader** — Dark-themed manga viewer with smooth navigation
-- **Zoom & Pan** — Ctrl+Scroll to zoom, drag to pan
+- **Continuous scroll** — Stack all pages vertically and scroll through them seamlessly
+- **Zoom & Pan** — Ctrl+Scroll to zoom, drag to pan (works in all modes)
 - **Fit Width mode** — Scale images to full width and scroll vertically
 - **Lock Zoom** — Preserve zoom level when switching pages
+- **Persistent preferences** — Reader options and sidebar state are saved and restored automatically
 - **Keyboard shortcuts** — Full set of shortcuts for navigation, zoom, and fullscreen
 - **Page list sidebar** — Collapsible sidebar with page list for quick jumping
 - **Click navigation** — Click the left/right half of the viewer to go to the previous/next page
+
+### Reader Options
+
+| Option | Description |
+|--------|-------------|
+| **Continuous** | Stack all pages vertically for seamless scrolling. Supports zoom in/out with Ctrl+Scroll. |
+| **Fit Width** | Scale images to fill the viewer width. Scroll vertically to read. |
+| **Lock Zoom** | Keep the current zoom level when navigating between pages. |
+
+All options are saved automatically and restored the next time you open the reader. The sidebar collapsed/expanded state is also remembered.
 
 ---
 
